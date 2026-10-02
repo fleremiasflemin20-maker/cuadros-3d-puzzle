@@ -1,0 +1,356 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Generador de Cuadros 3D</title>
+<meta name="description" content="Sube una imagen y descarga tu cuadro 3D en relieve dividido en 4 piezas tipo rompecabezas, listas para imprimir. Todo en tu navegador.">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230A0A0B'/><path d='M6 6h9v4a2 2 0 1 0 0 4v1H6zM17 6h9v9h-4a2 2 0 1 0-4 0h-1zM6 17h4a2 2 0 1 0 4 0h1v9H6zM17 17h1a2 2 0 1 1 4 0h4v9h-9z' fill='%23FF6A2B'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0B; --bg2: #121214; --bg3: #1A1A1D;
+    --ink: #F2EEE7; --muted: #8D8A85; --line: #26262A;
+    --accent: #FF6A2B; --accent-2: #FF7E47; --ok: #3DDC97; --err: #FF5A5A;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { background: var(--bg); color: var(--ink); }
+  body { font-family: Geist, system-ui, sans-serif; -webkit-font-smoothing: antialiased; min-height: 100vh; }
+  a { color: inherit; }
+  button, input, select { font: inherit; color: inherit; }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  nav {
+    display: flex; align-items: center; justify-content: space-between; gap: 16px;
+    padding: 16px clamp(16px, 3vw, 32px); border-bottom: 1px solid var(--line);
+  }
+  .marca { display: flex; gap: 10px; align-items: center; font-weight: 700; text-decoration: none; }
+  .marca svg { width: 22px; height: 22px; }
+  .marca span { color: var(--muted); font-weight: 400; }
+  nav .volver { font-size: .9rem; color: var(--muted); text-decoration: none; }
+  nav .volver:hover { color: var(--ink); }
+
+  .app { display: grid; grid-template-columns: 400px 1fr; height: calc(100vh - 59px); }
+  aside { border-right: 1px solid var(--line); padding: 24px clamp(16px, 2vw, 28px) 0; display: flex; flex-direction: column; gap: 26px; overflow-y: auto; scrollbar-width: thin; scrollbar-color: #2E2E33 transparent; }
+  .fijo { position: sticky; bottom: 0; z-index: 2; background: linear-gradient(180deg, rgba(10,10,11,0), var(--bg) 22px); padding: 26px 0 20px; margin-top: auto; }
+
+  .paso-t { display: flex; align-items: center; gap: 10px; font-weight: 700; font-size: 1rem; margin-bottom: 12px; }
+  .paso-t i {
+    font-style: normal; font-family: "Geist Mono", monospace; font-size: .72rem; color: var(--accent);
+    border: 1px solid rgba(255,106,43,.4); border-radius: 999px; width: 24px; height: 24px; display: grid; place-items: center;
+  }
+
+  /* subir imagen */
+  .drop {
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; text-align: center;
+    border: 1.5px dashed #3A3A3F; border-radius: 14px; padding: 28px 16px; cursor: pointer;
+    background: var(--bg2); transition: border-color .2s, background .2s;
+  }
+  .drop:hover, .drop.encima { border-color: var(--accent); background: rgba(255,106,43,.06); }
+  .drop:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
+  .drop svg { color: var(--accent); }
+  .drop b { font-weight: 500; }
+  .drop small { color: var(--muted); font-size: .82rem; }
+  .drop input { position: absolute; width: 1px; height: 1px; opacity: 0; }
+  .elegida { display: none; align-items: center; gap: 12px; background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 10px; }
+  .elegida img { width: 56px; height: 56px; object-fit: cover; border-radius: 8px; background: #fff; flex: none; }
+  .elegida div { min-width: 0; flex: 1; }
+  .elegida b { display: block; font-weight: 500; font-size: .92rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .elegida small { color: var(--muted); font-size: .8rem; }
+  .elegida label { font-size: .82rem; color: var(--accent); cursor: pointer; padding: 6px 8px; flex: none; }
+  .con-imagen .drop { display: none; }
+  .con-imagen .elegida { display: flex; }
+  .ejemplo { margin-top: 10px; background: none; border: 0; color: var(--muted); font-size: .84rem; cursor: pointer; text-decoration: underline; text-underline-offset: 3px; }
+  .ejemplo:hover { color: var(--ink); }
+
+  /* controles */
+  .campo { display: grid; gap: 8px; margin-bottom: 18px; }
+  .campo:last-child { margin-bottom: 0; }
+  .campo-t { display: flex; justify-content: space-between; align-items: baseline; font-size: .9rem; }
+  .campo-t output { font-family: "Geist Mono", monospace; font-size: .82rem; color: var(--ink); }
+  .ayuda { color: var(--muted); font-size: .8rem; line-height: 1.4; }
+  select {
+    appearance: none; background: var(--bg2) url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238D8A85' stroke-width='2'><path d='M6 9l6 6 6-6'/></svg>") right 14px center no-repeat;
+    border: 1px solid var(--line); border-radius: 10px; padding: 11px 36px 11px 12px; font-size: .92rem; cursor: pointer;
+  }
+  select:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 22px; background: transparent; cursor: pointer; }
+  input[type=range]::-webkit-slider-runnable-track { height: 4px; border-radius: 4px; background: linear-gradient(90deg, var(--accent) var(--p, 50%), #2E2E33 var(--p, 50%)); }
+  input[type=range]::-moz-range-track { height: 4px; border-radius: 4px; background: #2E2E33; }
+  input[type=range]::-moz-range-progress { height: 4px; border-radius: 4px; background: var(--accent); }
+  input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--ink); margin-top: -7px; border: 3px solid var(--accent); }
+  input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 50%; background: var(--ink); border: 3px solid var(--accent); }
+  input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  .num-cama { display: none; grid-template-columns: 1fr auto; align-items: center; gap: 10px; }
+  .num-cama.ver { display: grid; }
+  .num-cama input { background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; width: 100%; }
+
+  .interruptor { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); cursor: pointer; font-size: .9rem; }
+  .interruptor:last-of-type { border-bottom: 1px solid var(--line); }
+  .interruptor small { display: block; color: var(--muted); font-size: .78rem; margin-top: 2px; }
+  .interruptor input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .sw { width: 38px; height: 22px; border-radius: 999px; background: #2E2E33; position: relative; flex: none; transition: background .2s; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink); transition: transform .2s; }
+  .interruptor input:checked + .sw { background: var(--accent); }
+  .interruptor input:checked + .sw::after { transform: translateX(16px); }
+  .interruptor input:focus-visible + .sw { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  .segmentos { display: grid; grid-template-columns: repeat(3, 1fr); background: var(--bg2); border: 1px solid var(--line); border-radius: 10px; padding: 3px; }
+  .segmentos label { text-align: center; padding: 8px 4px; border-radius: 7px; font-size: .86rem; cursor: pointer; color: var(--muted); }
+  .segmentos input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .segmentos input:checked + span { color: var(--ink); }
+  .segmentos label:has(input:checked) { background: var(--bg3); box-shadow: inset 0 0 0 1px #3A3A3F; }
+  .segmentos label:has(input:focus-visible) { outline: 2px solid var(--accent); }
+
+  .generar {
+    width: 100%; border: 0; border-radius: 999px; padding: 17px 20px; font-size: 1.02rem; font-weight: 700;
+    background: var(--accent); color: #140A04; cursor: pointer; display: flex; justify-content: center; align-items: center; gap: 10px;
+    transition: background .2s, transform .2s;
+  }
+  .generar:hover:not(:disabled) { background: var(--accent-2); transform: translateY(-1px); }
+  .generar:disabled { background: #2A2A2E; color: #6B6862; cursor: not-allowed; }
+  .resumen { margin-top: 10px; text-align: center; color: var(--muted); font-size: .8rem; }
+
+  /* escenario */
+  .escenario { position: relative; height: 100%; background: radial-gradient(ellipse 80% 70% at 50% 45%, #18161A 0%, var(--bg) 75%); overflow: hidden; min-height: 420px; }
+  .vacio { position: absolute; inset: 0; display: grid; place-items: center; text-align: center; padding: 24px; }
+  .vacio-in { max-width: 420px; }
+  .vacio .piezas-ico { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; width: 120px; margin: 0 auto 28px; }
+  .vacio .piezas-ico i { aspect-ratio: 1; border-radius: 10px; border: 1.5px solid #34343A; }
+  .vacio .piezas-ico i:nth-child(1) { border-color: var(--accent); background: rgba(255,106,43,.08); }
+  .vacio h1 { font-size: clamp(1.8rem, 3.2vw, 2.6rem); font-weight: 900; letter-spacing: -.035em; line-height: 1.02; }
+  .vacio h1 em { font-style: normal; color: var(--accent); }
+  .vacio p { margin-top: 14px; color: var(--muted); line-height: 1.5; }
+  .btn-subir {
+    display: inline-flex; align-items: center; gap: 8px; margin-top: 24px; cursor: pointer;
+    background: var(--accent); color: #140A04; font-weight: 700; padding: 13px 22px; border-radius: 999px;
+  }
+  .btn-subir:hover { background: var(--accent-2); }
+  .vacio .pasitos { display: flex; justify-content: center; gap: 18px; margin-top: 26px; font-size: .82rem; color: var(--muted); flex-wrap: wrap; }
+  .vacio .pasitos b { color: var(--accent); font-family: "Geist Mono", monospace; font-weight: 500; margin-right: 6px; }
+
+  #plano, #visor { position: absolute; inset: 0; display: none; }
+  #plano { place-items: center; padding: 64px 24px 90px; }
+  #plano canvas { width: 100%; height: 100%; object-fit: contain; filter: drop-shadow(0 30px 60px rgba(0,0,0,.55)); }
+  #visor canvas { width: 100%; height: 100%; display: block; cursor: grab; }
+  #visor canvas:active { cursor: grabbing; }
+  .modo-plano #plano { display: grid; }
+  .modo-3d #visor { display: block; }
+  .modo-plano .vacio, .modo-3d .vacio { display: none; }
+
+  .barra-sup { position: absolute; top: 16px; left: 16px; right: 16px; display: none; justify-content: space-between; gap: 10px; z-index: 3; pointer-events: none; }
+  .barra-sup > * { pointer-events: auto; }
+  .modo-plano .barra-sup, .modo-3d .barra-sup { display: flex; }
+  .pestanas { display: flex; background: rgba(18,18,20,.85); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 999px; padding: 3px; }
+  .pestanas button { border: 0; background: none; padding: 7px 14px; border-radius: 999px; font-size: .84rem; color: var(--muted); cursor: pointer; }
+  .pestanas button[aria-pressed=true] { background: var(--bg3); color: var(--ink); }
+  .pestanas button:disabled { opacity: .4; cursor: not-allowed; }
+  .chip { background: rgba(18,18,20,.85); backdrop-filter: blur(8px); border: 1px solid var(--line); border-radius: 999px; padding: 7px 14px; font-size: .84rem; color: var(--muted); cursor: pointer; }
+  .chip:hover { color: var(--ink); }
+  .leyenda { position: absolute; left: 16px; bottom: 16px; display: none; gap: 14px; flex-wrap: wrap; font-size: .78rem; color: var(--muted); z-index: 3; }
+  .modo-plano .leyenda { display: flex; }
+  .leyenda span { display: flex; align-items: center; gap: 6px; }
+  .leyenda i { width: 10px; height: 10px; border-radius: 3px; }
+
+  /* progreso y descargas */
+  .tarjeta {
+    position: absolute; right: 16px; bottom: 16px; width: min(360px, calc(100% - 32px)); z-index: 4;
+    background: rgba(18,18,20,.92); backdrop-filter: blur(12px); border: 1px solid var(--line); border-radius: 16px; padding: 18px;
+    display: none;
+  }
+  .tarjeta.ver { display: block; }
+  .tarjeta h2 { font-size: 1rem; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+  .tarjeta p { color: var(--muted); font-size: .84rem; margin-top: 6px; line-height: 1.45; }
+  .barra { height: 6px; border-radius: 6px; background: #2A2A2E; margin-top: 14px; overflow: hidden; }
+  .barra i { display: block; height: 100%; width: 0; background: var(--accent); border-radius: 6px; transition: width .4s; }
+  .ok-ico { width: 20px; height: 20px; border-radius: 50%; background: var(--ok); color: #062014; display: grid; place-items: center; }
+  .lista { margin-top: 14px; display: grid; gap: 6px; }
+  .lista a {
+    display: flex; justify-content: space-between; align-items: center; gap: 10px; text-decoration: none;
+    padding: 9px 12px; border: 1px solid var(--line); border-radius: 10px; font-size: .84rem;
+  }
+  .lista a:hover { border-color: #4A4A50; }
+  .lista a small { color: var(--muted); font-family: "Geist Mono", monospace; font-size: .74rem; }
+  .lista a .dot { width: 8px; height: 8px; border-radius: 2px; display: inline-block; margin-right: 8px; }
+  .btn-zip {
+    margin-top: 14px; width: 100%; border: 0; border-radius: 999px; padding: 13px 16px; font-weight: 700; font-size: .95rem;
+    background: var(--accent); color: #140A04; cursor: pointer; display: flex; justify-content: center; gap: 8px; align-items: center;
+  }
+  .btn-zip:hover { background: var(--accent-2); }
+  .btn-zip:disabled { opacity: .6; cursor: wait; }
+  .tarjeta.error { border-color: rgba(255,90,90,.5); }
+  .tarjeta.error h2 { color: var(--err); }
+  .cerrar { position: absolute; top: 10px; right: 10px; background: none; border: 0; color: var(--muted); cursor: pointer; font-size: 1.2rem; line-height: 1; padding: 6px; }
+  .aviso-cambios { display: none; margin-top: 10px; font-size: .8rem; color: var(--accent); }
+  .desactualizado .aviso-cambios { display: block; }
+
+  .consejos { background: var(--bg2); border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; font-size: .82rem; color: var(--muted); line-height: 1.5; }
+  .consejos b { color: var(--ink); font-weight: 500; }
+  .consejos ul { margin: 6px 0 0 18px; }
+
+  .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+  @media (max-width: 900px) {
+    .app { grid-template-columns: 1fr; height: auto; }
+    aside { overflow: visible; }
+    .escenario { order: -1; height: 50vh; min-height: 340px; }
+    .marca span, .volver .largo { display: none; }
+    .vacio h1 { font-size: 1.7rem; }
+    .vacio .piezas-ico { width: 80px; margin-bottom: 18px; }
+    .vacio p { font-size: .92rem; }
+    aside { border-right: 0; border-top: 1px solid var(--line); }
+    .tarjeta { position: fixed; left: 12px; right: 12px; bottom: 12px; width: auto; }
+    .vacio .pasitos { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+
+<nav>
+  <a class="marca" href="../">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 6h9v4a2 2 0 1 0 0 4v1H6zM17 6h9v9h-4a2 2 0 1 0-4 0h-1zM6 17h4a2 2 0 1 0 4 0h1v9H6zM17 17h1a2 2 0 1 1 4 0h4v9h-9z" fill="#FF6A2B"/></svg>
+    Cuadros 3D Puzzle <span>/ Generador</span>
+  </a>
+  <a class="volver" href="../">← Volver<span class="largo"> al inicio</span></a>
+</nav>
+
+<div class="app" id="app">
+  <aside>
+    <!-- 1. imagen -->
+    <section aria-labelledby="t1" id="bloque-imagen">
+      <h2 class="paso-t" id="t1"><i>1</i>Sube tu imagen</h2>
+      <label class="drop" id="drop">
+        <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M4 16v3a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-3"/></svg>
+        <b>Arrastra tu imagen aquí</b>
+        <small>o toca para elegirla · JPG, PNG o WEBP</small>
+        <input type="file" id="archivo" accept="image/*">
+      </label>
+      <div class="elegida">
+        <img id="mini" alt="">
+        <div><b id="nombre-img">imagen</b><small id="info-img"></small></div>
+        <label for="archivo">Cambiar</label>
+      </div>
+      <button class="ejemplo" id="btn-ejemplo" type="button">¿No tienes una a mano? Prueba con un ejemplo</button>
+    </section>
+
+    <!-- 2. ajustes -->
+    <section aria-labelledby="t2">
+      <h2 class="paso-t" id="t2"><i>2</i>Ajusta tu cuadro</h2>
+
+      <div class="campo">
+        <label class="campo-t" for="impresora">Tu impresora</label>
+        <select id="impresora">
+          <option value="350" selected>Creality K2 Plus · 350 mm</option>
+          <option value="256">Bambu Lab X1 / P1S / A1 · 256 mm</option>
+          <option value="250">Prusa Core One / MK4 · 250 mm</option>
+          <option value="220">Creality K1 / Ender 3 · 220 mm</option>
+          <option value="180">Bambu Lab A1 mini · 180 mm</option>
+          <option value="otra">Otra (escribir medida)</option>
+        </select>
+        <div class="num-cama" id="caja-cama">
+          <input type="number" id="cama-mm" min="100" max="1000" value="300" aria-label="Lado más corto de la cama en milímetros">
+          <span class="ayuda">mm de cama</span>
+        </div>
+      </div>
+
+      <div class="campo">
+        <div class="campo-t"><label for="tamano">Tamaño del cuadro</label><output id="out-tamano">—</output></div>
+        <input type="range" id="tamano" min="20" max="64" step="1" value="64">
+        <span class="ayuda" id="ayuda-tamano">Cada pieza mide la mitad y cabe en tu impresora.</span>
+      </div>
+
+      <div class="campo">
+        <div class="campo-t"><label for="relieve">Profundidad del relieve</label><output id="out-relieve">4 mm</output></div>
+        <input type="range" id="relieve" min="1" max="10" step="0.5" value="4">
+      </div>
+
+      <label class="interruptor">
+        <span>Invertir relieve<small>Lo claro sobresale en vez de lo oscuro</small></span>
+        <input type="checkbox" id="invertir"><span class="sw" aria-hidden="true"></span>
+      </label>
+      <label class="interruptor">
+        <span>Marco alrededor<small>Un borde elevado de 1 cm, como un cuadro</small></span>
+        <input type="checkbox" id="marco" checked><span class="sw" aria-hidden="true"></span>
+      </label>
+      <label class="interruptor">
+        <span>Mejorar contraste<small>Aprovecha toda la profundidad del relieve</small></span>
+        <input type="checkbox" id="contraste" checked><span class="sw" aria-hidden="true"></span>
+      </label>
+
+      <div class="campo" style="margin-top:18px">
+        <span class="campo-t" id="lbl-calidad">Nivel de detalle</span>
+        <div class="segmentos" role="radiogroup" aria-labelledby="lbl-calidad">
+          <label><input type="radio" name="calidad" value="1.0"><span>Rápido</span></label>
+          <label><input type="radio" name="calidad" value="0.6" checked><span>Normal</span></label>
+          <label><input type="radio" name="calidad" value="0.4"><span>Alto</span></label>
+        </div>
+        <span class="ayuda" id="ayuda-calidad"></span>
+      </div>
+    </section>
+
+    <div class="consejos">
+      <b>Consejos para un buen resultado</b>
+      <ul>
+        <li>Las imágenes con buen contraste (siluetas, logos, dibujos) quedan mejor que las fotos borrosas.</li>
+        <li>Imprime las piezas con la cara plana sobre la cama.</li>
+        <li>Prueba el encaje con 2 piezas antes de imprimir las 4.</li>
+      </ul>
+    </div>
+
+    <!-- 3. generar -->
+    <section aria-labelledby="t3" class="fijo">
+      <h2 class="paso-t" id="t3"><i>3</i>Genera y descarga</h2>
+      <button class="generar" id="btn-generar" type="button" disabled>
+        <svg width="18" height="18" viewBox="0 0 32 32" aria-hidden="true"><path d="M6 6h9v4a2 2 0 1 0 0 4v1H6zM17 6h9v9h-4a2 2 0 1 0-4 0h-1zM6 17h4a2 2 0 1 0 4 0h1v9H6zM17 17h1a2 2 0 1 1 4 0h4v9h-9z" fill="currentColor"/></svg>
+        <span id="txt-generar">Sube una imagen primero</span>
+      </button>
+      <p class="resumen" id="resumen">Todo se procesa en tu navegador. Tu imagen no se sube a ningún servidor.</p>
+    </section>
+  </aside>
+
+  <div class="escenario" id="escenario">
+    <div class="vacio">
+      <div class="vacio-in">
+        <div class="piezas-ico" aria-hidden="true"><i></i><i></i><i></i><i></i></div>
+        <h1>Tu imagen, en<br><em>cuatro piezas.</em></h1>
+        <p>Sube cualquier foto o dibujo. Te mostramos cómo quedará el relieve y descargas los archivos listos para imprimir.</p>
+        <label for="archivo" class="btn-subir">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" aria-hidden="true"><path d="M12 16V4M7 9l5-5 5 5M4 20h16"/></svg>
+          Elegir imagen</label>
+        <div class="pasitos"><span><b>01</b>Sube</span><span><b>02</b>Ajusta</span><span><b>03</b>Descarga</span></div>
+      </div>
+    </div>
+
+    <div class="barra-sup">
+      <div class="pestanas" role="group" aria-label="Tipo de vista">
+        <button type="button" id="v-plano" aria-pressed="true">Vista previa</button>
+        <button type="button" id="v-3d" aria-pressed="false" disabled title="Disponible al generar">3D</button>
+      </div>
+      <button class="chip" type="button" id="btn-separar" hidden>Separar piezas</button>
+    </div>
+
+    <div id="plano"><canvas id="lienzo" role="img" aria-label="Vista previa del relieve con los cortes de las cuatro piezas"></canvas></div>
+    <div id="visor"></div>
+
+    <div class="leyenda" aria-hidden="true">
+      <span><i style="background:#FF6A2B"></i>A</span><span><i style="background:#3EA6FF"></i>B</span>
+      <span><i style="background:#3DDC97"></i>C</span><span><i style="background:#F5C542"></i>D</span>
+    </div>
+
+    <div class="tarjeta" id="tarjeta" role="status" aria-live="polite"></div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script type="importmap">
+{ "imports": {
+  "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js",
+  "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.169.0/examples/jsm/"
+} }
+</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>

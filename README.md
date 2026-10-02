@@ -4,6 +4,10 @@ Convierte cualquier imagen en un **cuadro 3D en relieve** dividido en **4 piezas
 
 **Landing:** https://fleremiasflemin20-maker.github.io/cuadros-3d-puzzle/
 
+**Generador en el navegador (sin instalar nada):** https://fleremiasflemin20-maker.github.io/cuadros-3d-puzzle/generador/
+
+Sube tu imagen, ajusta el tamaño y la profundidad, mira la vista previa y descarga un ZIP con las 4 piezas. Todo se procesa en tu navegador, así que la imagen no se sube a ningún servidor.
+
 ![Vista previa: mandala dividido en 4 piezas con pestañas](assets/vista_previa.png)
 
 ## Qué hace
@@ -15,7 +19,9 @@ Convierte cualquier imagen en un **cuadro 3D en relieve** dividido en **4 piezas
 
 Valores por defecto pensados para la **Creality K2 Plus** (cama de 350×350 mm): cuadro de 62 cm de ancho y piezas de unos 33 cm.
 
-## Instalación
+## Versión de línea de comandos (Python)
+
+### Instalación
 
 ```bash
 git clone https://github.com/fleremiasflemin20-maker/cuadros-3d-puzzle
@@ -24,7 +30,7 @@ python3 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
 
-## Uso
+### Uso
 
 ```bash
 .venv/bin/python cuadro_puzzle.py mi_foto.jpg
@@ -76,6 +82,7 @@ cuadro_puzzle.py          generador principal
 herramientas/piezas_web.py  exporta las piezas livianas que usa la landing
 ejemplos/mandala.png      imagen de ejemplo
 index.html                landing (GitHub Pages)
+generador/                generador web: interfaz (app.js) y motor en Web Worker (motor.js)
 assets/                   vista previa y piezas 3D para la web
 ```
 
