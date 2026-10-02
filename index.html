@@ -1,0 +1,470 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cuadros 3D Puzzle</title>
+<meta name="description" content="Convierte cualquier imagen en un cuadro 3D en relieve de 62 cm, dividido en 4 piezas que encajan como un rompecabezas. Hecho para la Creality K2 Plus.">
+<meta property="og:title" content="Cuadros 3D Puzzle">
+<meta property="og:description" content="Tu imagen, en relieve. Cuatro piezas, un cuadro.">
+<meta property="og:image" content="assets/vista_previa.png">
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='6' fill='%230A0A0B'/><path d='M6 6h9v4a2 2 0 1 0 0 4v1H6zM17 6h9v9h-4a2 2 0 1 0-4 0h-1zM6 17h4a2 2 0 1 0 4 0h1v9H6zM17 17h1a2 2 0 1 1 4 0h4v9h-9z' fill='%23FF6A2B'/></svg>">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;700;900&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0A0A0B;
+    --ink: #F2EEE7;
+    --muted: #8D8A85;
+    --line: #232325;
+    --accent: #FF6A2B;
+    --panel: rgba(18, 18, 20, .72);
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html { background: var(--bg); }
+  body {
+    background: var(--bg); color: var(--ink);
+    font-family: Geist, system-ui, sans-serif; font-weight: 400;
+    -webkit-font-smoothing: antialiased; overflow-x: hidden;
+  }
+  a { color: inherit; }
+  ::selection { background: var(--accent); color: var(--bg); }
+
+  /* ---- escenario fijo ---- */
+  #escena {
+    position: fixed; inset: 0; z-index: 0;
+    background: radial-gradient(ellipse 70% 60% at 68% 50%, #1a1715 0%, var(--bg) 70%);
+  }
+  #escena canvas { display: block; width: 100%; height: 100%; }
+  #escena.sin-webgl {
+    background: var(--bg) url(assets/vista_previa.png) 75% 50% / min(70vh, 55vw) no-repeat;
+  }
+  .grano {
+    position: fixed; inset: 0; z-index: 1; pointer-events: none; opacity: .06;
+    background-image: url("data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence baseFrequency='.9' numOctaves='2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+  }
+
+  /* ---- navegación ---- */
+  nav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 10;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 22px clamp(16px, 4vw, 56px);
+    background: linear-gradient(180deg, rgba(10,10,11,.85), rgba(10,10,11,0));
+  }
+  .marca { display: flex; gap: 10px; align-items: center; font-weight: 700; letter-spacing: -.01em; text-decoration: none; }
+  .marca svg { width: 22px; height: 22px; }
+  .nav-links { display: flex; gap: 28px; align-items: center; font-size: .9rem; color: var(--muted); }
+  .nav-links a { text-decoration: none; transition: color .2s; }
+  .nav-links a:hover { color: var(--ink); }
+  .btn-gh {
+    display: inline-flex; gap: 8px; align-items: center; color: var(--ink) !important;
+    border: 1px solid var(--line); padding: 9px 16px; border-radius: 999px; background: rgba(10,10,11,.6);
+    backdrop-filter: blur(8px);
+  }
+  .btn-gh:hover { border-color: var(--accent); }
+
+  /* ---- escenas de texto ---- */
+  main { position: relative; z-index: 2; }
+  section {
+    min-height: 100vh; display: flex; align-items: center;
+    padding: 140px clamp(16px, 6vw, 96px);
+  }
+  .bloque { max-width: 560px; }
+  .eyebrow {
+    font-family: "Geist Mono", monospace; font-size: .78rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin-bottom: 28px; display: flex; gap: 12px; align-items: center;
+  }
+  .eyebrow::before { content: ""; width: 28px; height: 1px; background: var(--accent); }
+  h1, h2 { font-weight: 900; letter-spacing: -.045em; line-height: .9; }
+  h1 { font-size: clamp(3.2rem, 7.4vw, 8.6rem); }
+  h1 .l { white-space: nowrap; }
+  #hero .bloque { max-width: 680px; }
+  h2 { font-size: clamp(2.8rem, 6.5vw, 7rem); }
+  h1 .l, h2 .l { display: block; }
+  h1 em, h2 em { font-style: normal; color: var(--accent); }
+  .lead { margin-top: 32px; font-size: clamp(1.05rem, 1.4vw, 1.25rem); line-height: 1.55; color: #C9C4BC; font-weight: 300; max-width: 30em; }
+  .ctas { margin-top: 44px; display: flex; gap: 14px; flex-wrap: wrap; }
+  .btn {
+    display: inline-flex; align-items: center; gap: 10px; text-decoration: none; font-weight: 500;
+    padding: 16px 26px; border-radius: 999px; font-size: 1rem; transition: transform .25s, background .25s, border-color .25s;
+  }
+  .btn:hover { transform: translateY(-2px); }
+  .btn-1 { background: var(--accent); color: #140A04; }
+  .btn-1:hover { background: #FF7E47; }
+  .btn-2 { border: 1px solid #3A3A3D; color: var(--ink); }
+  .btn-2:hover { border-color: var(--ink); }
+
+  /* pasos */
+  .pasos { margin-top: 48px; display: grid; gap: 2px; }
+  .paso {
+    display: grid; grid-template-columns: 64px 1fr; gap: 20px; align-items: center;
+    padding: 20px 0; border-top: 1px solid var(--line);
+  }
+  .paso:last-child { border-bottom: 1px solid var(--line); }
+  .paso img { width: 64px; height: 64px; object-fit: cover; border-radius: 8px; background: #fff; }
+  .paso .n { font-family: "Geist Mono", monospace; color: var(--accent); font-size: .78rem; }
+  .paso h3 { font-size: 1.15rem; font-weight: 700; letter-spacing: -.01em; margin: 2px 0 4px; }
+  .paso p { color: var(--muted); font-size: .95rem; line-height: 1.45; }
+  .icono-paso {
+    width: 64px; height: 64px; border-radius: 8px; border: 1px solid var(--line);
+    display: grid; place-items: center; color: var(--accent); background: rgba(255,106,43,.06);
+  }
+
+  /* cifras */
+  .cifras { margin-top: 52px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 36px 28px; }
+  .cifra b { display: block; font-size: clamp(2.6rem, 4.5vw, 4.2rem); font-weight: 900; letter-spacing: -.04em; line-height: 1; }
+  .cifra b small { font-size: .4em; font-weight: 500; color: var(--muted); letter-spacing: 0; margin-left: 4px; }
+  .cifra > span { display: block; margin-top: 8px; color: var(--muted); font-size: .92rem; }
+
+  /* comandos */
+  .terminal {
+    margin-top: 44px; border: 1px solid var(--line); border-radius: 14px; overflow: hidden;
+    background: rgba(14,14,16,.88); backdrop-filter: blur(10px);
+  }
+  .terminal-top {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: 12px 16px; border-bottom: 1px solid var(--line);
+    font-family: "Geist Mono", monospace; font-size: .75rem; color: var(--muted);
+  }
+  .puntos { display: flex; gap: 6px; }
+  .puntos i { width: 10px; height: 10px; border-radius: 50%; background: #2C2C2F; }
+  .copiar {
+    font: inherit; color: var(--ink); background: none; border: 1px solid var(--line);
+    padding: 5px 12px; border-radius: 6px; cursor: pointer;
+  }
+  .copiar:hover { border-color: var(--accent); }
+  pre {
+    padding: 20px; font-family: "Geist Mono", monospace; font-size: .86rem; line-height: 1.8;
+    overflow-x: auto; color: #DCD6CC;
+  }
+  pre .c { color: #5E5B57; }
+  pre .p { color: var(--accent); user-select: none; }
+  .params { margin-top: 28px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .params code {
+    font-family: "Geist Mono", monospace; font-size: .78rem; padding: 6px 10px;
+    border: 1px solid var(--line); border-radius: 6px; color: var(--muted); background: rgba(10,10,11,.6);
+  }
+  .params code b { color: var(--ink); font-weight: 500; }
+
+  footer {
+    position: relative; z-index: 2; border-top: 1px solid var(--line); background: var(--bg);
+    padding: 36px clamp(16px, 6vw, 96px); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap;
+    color: var(--muted); font-size: .88rem;
+  }
+
+  .velo { display: none; }
+  .scroll-hint {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%); z-index: 3;
+    font-family: "Geist Mono", monospace; font-size: .7rem; letter-spacing: .2em; color: var(--muted);
+    display: flex; flex-direction: column; align-items: center; gap: 10px; transition: opacity .4s;
+  }
+  .scroll-hint i { width: 1px; height: 36px; background: linear-gradient(var(--muted), transparent); }
+
+  .progreso { position: fixed; top: 0; left: 0; height: 2px; background: var(--accent); z-index: 11; width: 100%; transform-origin: 0 50%; transform: scaleX(0); }
+
+  @media (max-width: 860px) {
+    .nav-links a:not(.btn-gh) { display: none; }
+    section { padding: 120px 16px 80px; align-items: flex-end; }
+    .velo {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 78vh; z-index: 1; pointer-events: none;
+      background: linear-gradient(180deg, rgba(10,10,11,0) 0%, rgba(10,10,11,.88) 30%, rgba(10,10,11,.94) 100%);
+    }
+    #hero { align-items: flex-end; }
+    .scroll-hint { display: none; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .btn, .btn:hover { transition: none; transform: none; }
+  }
+</style>
+</head>
+<body>
+
+<div id="escena" aria-hidden="true"></div>
+<div class="grano" aria-hidden="true"></div>
+<div class="velo" aria-hidden="true"></div>
+<div class="progreso" aria-hidden="true"></div>
+
+<nav>
+  <a class="marca" href="#hero">
+    <svg viewBox="0 0 32 32" aria-hidden="true"><path d="M6 6h9v4a2 2 0 1 0 0 4v1H6zM17 6h9v9h-4a2 2 0 1 0-4 0h-1zM6 17h4a2 2 0 1 0 4 0h1v9H6zM17 17h1a2 2 0 1 1 4 0h4v9h-9z" fill="#FF6A2B"/></svg>
+    Cuadros 3D Puzzle
+  </a>
+  <div class="nav-links">
+    <a href="#proceso">Cómo funciona</a>
+    <a href="#encaje">Encaje</a>
+    <a href="#empieza">Empezar</a>
+    <a class="btn-gh" href="https://github.com/fleremiasflemin20-maker/cuadros-3d-puzzle">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 .5a12 12 0 0 0-3.8 23.4c.6.1.8-.3.8-.6v-2.1c-3.3.7-4-1.6-4-1.6-.6-1.4-1.4-1.8-1.4-1.8-1.1-.7.1-.7.1-.7 1.2.1 1.9 1.2 1.9 1.2 1.1 1.8 2.8 1.3 3.5 1 .1-.8.4-1.3.8-1.6-2.7-.3-5.5-1.3-5.5-6 0-1.3.5-2.4 1.2-3.2-.1-.3-.5-1.5.1-3.2 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.7 1.7.3 2.9.1 3.2.8.8 1.2 1.9 1.2 3.2 0 4.6-2.8 5.6-5.5 5.9.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6A12 12 0 0 0 12 .5Z"/></svg>
+      GitHub
+    </a>
+  </div>
+</nav>
+
+<main>
+  <section id="hero">
+    <div class="bloque">
+      <p class="eyebrow r">Open source · Impresión 3D</p>
+      <h1><span class="l r">Tu imagen,</span><span class="l r">en <em>relieve.</em></span></h1>
+      <p class="lead r">Convierte cualquier foto, dibujo o logo en un cuadro 3D de 62&nbsp;cm, dividido en cuatro piezas que encajan como un rompecabezas.</p>
+      <div class="ctas r">
+        <a class="btn btn-1" href="#empieza">Empezar ahora
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+        </a>
+        <a class="btn btn-2" href="#proceso">Cómo funciona</a>
+      </div>
+    </div>
+  </section>
+
+  <section id="proceso">
+    <div class="bloque">
+      <p class="eyebrow r">Cómo funciona</p>
+      <h2><span class="l r">De foto</span><span class="l r">a <em>STL</em>.</span></h2>
+      <p class="lead r">Un solo comando. Cada tono de gris se convierte en una altura: lo oscuro sobresale y lo claro queda en la base.</p>
+      <div class="pasos">
+        <div class="paso r">
+          <img src="ejemplos/mandala.png" alt="Imagen de ejemplo: un mandala en blanco y negro" width="64" height="64" loading="lazy">
+          <div><span class="n">01</span><h3>Tu imagen</h3><p>JPG o PNG. Funciona mejor con buen contraste: siluetas, logos o dibujos de líneas.</p></div>
+        </div>
+        <div class="paso r">
+          <div class="icono-paso"><svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3 17l5-6 4 4 3-3 6 5"/><path d="M3 21h18"/></svg></div>
+          <div><span class="n">02</span><h3>Mapa de alturas</h3><p>Base de 3&nbsp;mm y relieve de hasta 4&nbsp;mm, con marco elevado. Todo ajustable.</p></div>
+        </div>
+        <div class="paso r">
+          <img src="assets/vista_previa.png" alt="Vista previa del cuadro dividido en cuatro piezas con pestañas" width="64" height="64" loading="lazy">
+          <div><span class="n">03</span><h3>Cuatro STL</h3><p>Piezas cerradas y sin errores de malla, listas para Creality Print, Bambu Studio u Orca.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="encaje">
+    <div class="bloque">
+      <p class="eyebrow r">El encaje</p>
+      <h2><span class="l r">Encaja.</span><span class="l r">Sin <em>tornillos.</em></span></h2>
+      <p class="lead r">Dos pestañas de rompecabezas en cada unión, con 0,25&nbsp;mm de holgura calculada. Las piezas entran firmes y alineadas. Una gota de pegamento por detrás y ya es una sola pieza.</p>
+    </div>
+  </section>
+
+  <section id="cama">
+    <div class="bloque">
+      <p class="eyebrow r">Pensado para tu impresora</p>
+      <h2><span class="l r">Grande.</span><span class="l r">Por <em>partes.</em></span></h2>
+      <p class="lead r">Un cuadro que nunca cabría en la cama, partido en piezas que sí caben. Ajustado para la Creality K2 Plus, y adaptable a cualquier impresora.</p>
+      <div class="cifras">
+        <div class="cifra r"><b><span class="cuenta" data-a="62">62</span><small>cm</small></b><span>cuadro terminado</span></div>
+        <div class="cifra r"><b><span class="cuenta" data-a="33">33</span><small>cm</small></b><span>por pieza</span></div>
+        <div class="cifra r"><b><span class="cuenta" data-a="350">350</span><small>mm</small></b><span>cama de la K2 Plus</span></div>
+        <div class="cifra r"><b>0,25<small>mm</small></b><span>holgura del encaje</span></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="empieza">
+    <div class="bloque">
+      <p class="eyebrow r">Empezar</p>
+      <h2><span class="l r">Imprime</span><span class="l r">el <em>tuyo.</em></span></h2>
+      <div class="terminal r">
+        <div class="terminal-top">
+          <div class="puntos"><i></i><i></i><i></i></div>
+          <span>terminal</span>
+          <button class="copiar" type="button">Copiar</button>
+        </div>
+<pre id="cmd"><span class="p">$ </span>git clone https://github.com/fleremiasflemin20-maker/cuadros-3d-puzzle
+<span class="p">$ </span>cd cuadros-3d-puzzle
+<span class="p">$ </span>python3 -m venv .venv
+<span class="p">$ </span>.venv/bin/pip install -r requirements.txt
+<span class="p">$ </span>.venv/bin/python cuadro_puzzle.py mi_foto.jpg
+<span class="c"># → salida_mi_foto/ con 4 STL + vista_previa.png</span></pre>
+      </div>
+      <div class="params r">
+        <code><b>--ancho</b> 620</code>
+        <code><b>--relieve</b> 4</code>
+        <code><b>--base</b> 3</code>
+        <code><b>--marco</b> 10</code>
+        <code><b>--holgura</b> 0.25</code>
+        <code><b>--invertir</b></code>
+        <code><b>--cama</b> 350</code>
+      </div>
+      <div class="ctas r">
+        <a class="btn btn-1" href="https://github.com/fleremiasflemin20-maker/cuadros-3d-puzzle">Ver el código en GitHub</a>
+      </div>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <span>Cuadros 3D Puzzle · Código abierto, licencia MIT</span>
+  <span>Hecho por <a href="https://github.com/fleremiasflemin20-maker">fleremiasflemin20-maker</a></span>
+</footer>
+
+<div class="scroll-hint" aria-hidden="true">SCROLL<i></i></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.1.13/dist/lenis.min.js"></script>
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js" } }
+</script>
+
+<script type="module">
+import * as THREE from "three";
+
+const reducido = matchMedia("(prefers-reduced-motion: reduce)").matches;
+const movil = () => innerWidth < 860;
+gsap.registerPlugin(ScrollTrigger);
+
+// ---------- scroll suave ----------
+if (!reducido && window.Lenis) {
+  const lenis = new Lenis({ lerp: 0.09 });
+  lenis.on("scroll", ScrollTrigger.update);
+  gsap.ticker.add(t => lenis.raf(t * 1000));
+  gsap.ticker.lagSmoothing(0);
+  document.querySelectorAll('a[href^="#"]').forEach(a => a.addEventListener("click", e => {
+    e.preventDefault(); lenis.scrollTo(a.getAttribute("href"), { offset: 0, duration: 1.4 });
+  }));
+}
+
+// ---------- copiar comandos ----------
+document.querySelector(".copiar").addEventListener("click", async e => {
+  const texto = [...document.querySelectorAll("#cmd")][0].innerText
+    .split("\n").filter(l => l.startsWith("$ ")).map(l => l.slice(2)).join("\n");
+  try { await navigator.clipboard.writeText(texto); e.target.textContent = "Copiado"; }
+  catch { e.target.textContent = "Selecciona y copia"; }
+  setTimeout(() => (e.target.textContent = "Copiar"), 1800);
+});
+
+// ---------- revelados de texto ----------
+if (!reducido) {
+  document.querySelectorAll("section").forEach(sec => {
+    const els = sec.querySelectorAll(".r");
+    gsap.fromTo(els, { y: 40, opacity: 0 }, {
+      y: 0, opacity: 1, duration: 0.9, ease: "power3.out", stagger: 0.08,
+      scrollTrigger: { trigger: sec, start: "top 65%", toggleActions: "play none none reverse" }
+    });
+  });
+  document.querySelectorAll(".cuenta").forEach(el => {
+    const fin = +el.dataset.a, o = { v: 0 };
+    gsap.to(o, { v: fin, duration: 1.4, ease: "power2.out",
+      scrollTrigger: { trigger: el, start: "top 85%" },
+      onUpdate: () => (el.textContent = Math.round(o.v)) });
+  });
+}
+gsap.to(".progreso", { scaleX: 1, ease: "none", scrollTrigger: { start: 0, end: "max", scrub: true } });
+ScrollTrigger.create({ start: 80, onEnter: () => gsap.to(".scroll-hint", { opacity: 0 }), onLeaveBack: () => gsap.to(".scroll-hint", { opacity: 1 }) });
+
+// ---------- escena 3D ----------
+const cont = document.getElementById("escena");
+let renderer;
+try {
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true, powerPreference: "high-performance" });
+} catch { cont.classList.add("sin-webgl"); }
+
+if (renderer) {
+  renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.05;
+  cont.appendChild(renderer.domElement);
+
+  const scene = new THREE.Scene();
+  const camera = new THREE.PerspectiveCamera(30, 1, 10, 10000);
+
+  scene.add(new THREE.HemisphereLight(0xfff4e8, 0x15110e, 0.55));
+  const clave = new THREE.DirectionalLight(0xfff1e0, 2.6);   // luz rasante: hace leer el relieve
+  clave.position.set(-700, 520, 260);
+  scene.add(clave);
+  const borde = new THREE.DirectionalLight(0xff6a2b, 0.75);    // acento naranja
+  borde.position.set(800, -420, 160);
+  scene.add(borde);
+  const relleno = new THREE.DirectionalLight(0xffffff, 0.35);
+  relleno.position.set(0, 0, 1000);
+  scene.add(relleno);
+
+  const grupo = new THREE.Group();
+  const flota = new THREE.Group();
+  flota.add(grupo);
+  scene.add(flota);
+
+  const material = new THREE.MeshStandardMaterial({ color: 0xE9E2D5, roughness: 0.58, metalness: 0 });
+  const piezas = [
+    { n: "A", d: [-1, 1], k: 1.0, r: 0.6 },
+    { n: "B", d: [1, 1], k: 0.35, r: -0.4 },
+    { n: "C", d: [-1, -1], k: 0.7, r: -0.8 },
+    { n: "D", d: [1, -1], k: -0.2, r: 0.5 },
+  ];
+
+  async function cargar(p) {
+    const buf = await (await fetch(`assets/piezas/${p.n}.bin`)).arrayBuffer();
+    const [nv, nt] = new Uint32Array(buf, 0, 2);
+    const q = new Int16Array(buf, 8, nv * 3);
+    const pos = new Float32Array(nv * 3);
+    for (let i = 0; i < pos.length; i++) pos[i] = q[i] * 0.1;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(new THREE.BufferAttribute(new Uint16Array(buf, 8 + nv * 6, nt * 3), 1));
+    geo.computeVertexNormals();
+    p.mesh = new THREE.Mesh(geo, material);
+    grupo.add(p.mesh);
+  }
+
+  // estados del cuadro en cada escena
+  const E = {
+    hero:    { sep: 60, alza: 60, giro: 0.12, rx: -0.55, ry: 0.5,   rz: 0.15,  px: 1, dist: 2350 },
+    proceso: { sep: 42, alza: 0,  giro: 0,    rx: -0.08, ry: -0.3,  rz: 0,     px: 1, dist: 2300 },
+    encaje:  { sep: 0,  alza: 0,  giro: 0,    rx: -0.38, ry: 0.38,  rz: -0.08, px: 1, dist: 2050 },
+    cama:    { sep: 0,  alza: 0,  giro: 0,    rx: -0.85, ry: 0.25,  rz: 0.12,  px: 1, dist: 1250 },
+    empieza: { sep: 0,  alza: 0,  giro: 0,    rx: -0.05, ry: -0.22, rz: 0,     px: 1, dist: 2150 },
+  };
+  const s = { ...E.hero, intro: reducido ? 0 : 1 };
+  const raton = { x: 0, y: 0, tx: 0, ty: 0 };
+  addEventListener("pointermove", e => {
+    raton.tx = e.clientX / innerWidth - 0.5;
+    raton.ty = e.clientY / innerHeight - 0.5;
+  });
+
+  function tamano() {
+    const w = innerWidth, h = innerHeight;
+    renderer.setSize(w, h, false);
+    camera.aspect = w / h;
+    camera.updateProjectionMatrix();
+  }
+  addEventListener("resize", tamano);
+  tamano();
+
+  const reloj = new THREE.Clock();
+  function cuadro() {
+    const t = reloj.getElapsedTime();
+    raton.x += (raton.tx - raton.x) * 0.05;
+    raton.y += (raton.ty - raton.y) * 0.05;
+    const sep = s.sep + s.intro * 520;
+    for (const p of piezas) {
+      if (!p.mesh) continue;
+      p.mesh.position.set(p.d[0] * sep, p.d[1] * sep, (s.alza + s.intro * 200) * p.k);
+      p.mesh.rotation.z = (s.giro + s.intro * 0.4) * p.r;
+    }
+    const m = movil();
+    grupo.rotation.set(s.rx + raton.y * 0.1, s.ry + raton.x * 0.16, s.rz);
+    flota.position.set(m ? 0 : s.px * Math.min(innerWidth * 0.3, 420), m ? 700 : 0, 0);
+    if (!reducido) flota.position.y += Math.sin(t * 0.8) * 6;
+    camera.position.set(0, 0, s.dist * (m ? 1.9 : 1));
+    camera.lookAt(0, 0, 0);
+    renderer.render(scene, camera);
+    requestAnimationFrame(cuadro);
+  }
+
+  Promise.all(piezas.map(cargar)).then(() => {
+    cuadro();
+    if (!reducido) {
+      gsap.to(s, { intro: 0, duration: 2.2, ease: "power3.out" });
+      const tl = gsap.timeline({ defaults: { ease: "power2.inOut" },
+        scrollTrigger: { trigger: "main", start: "top top", end: "bottom bottom", scrub: 1.2 } });
+      ["proceso", "encaje", "cama", "empieza"].forEach(k => tl.to(s, { ...E[k], duration: 1 }));
+    } else {
+      Object.assign(s, E.encaje);
+    }
+    ScrollTrigger.refresh();
+  }).catch(() => cont.classList.add("sin-webgl"));
+}
+</script>
+</body>
+</html>
